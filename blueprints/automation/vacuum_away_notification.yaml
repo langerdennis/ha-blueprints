@@ -1,0 +1,493 @@
+blueprint:
+  name: "Saugroboter: Abwesenheits-Abfrage (Actionable Notification)"
+  description: >
+    Sendet maximal 1x täglich eine Actionable Notification an zwei Smartphones
+    (Home Assistant Companion App), sobald beide Personen für eine einstellbare
+    Dauer außer Haus sind und am heutigen Tag noch nicht gereinigt wurde.
+    Schließt offene Benachrichtigungen synchron auf beiden Geräten, sobald eine
+    Auswahl getroffen wird oder jemand nach Hause zurückkehrt.
+  domain: automation
+  min_version: "2024.8.0"
+  source_url: https://github.com/langerdennis/ha-blueprints/blob/main/blueprints/automation/vacuum_away_notification.yaml
+
+  input:
+    residents_section:
+      name: "Personen & Smartphones"
+      icon: mdi:account-multiple
+      description: "Auswahl der beiden Personen und der zugehörigen Geräte mit installierter Home Assistant Companion App."
+      input:
+        person_1:
+          name: "Person 1"
+          selector:
+            entity:
+              filter:
+                - domain: person
+        notify_device_1:
+          name: "Smartphone Person 1"
+          selector:
+            device:
+              integration: mobile_app
+        person_2:
+          name: "Person 2"
+          selector:
+            entity:
+              filter:
+                - domain: person
+        notify_device_2:
+          name: "Smartphone Person 2"
+          selector:
+            device:
+              integration: mobile_app
+
+    vacuum_section:
+      name: "Saugroboter & Tages-Merker"
+      icon: mdi:robot-vacuum
+      description: "Konfiguration des Saugroboters sowie der täglichen Abfrage-Sperre."
+      input:
+        vacuum_entity:
+          name: "Saugroboter"
+          selector:
+            entity:
+              filter:
+                - domain: vacuum
+        last_prompt_helper:
+          name: "Datums-Helfer (Letzte Abfrage)"
+          description: >
+            Helfer vom Typ 'Datum' (input_datetime nur mit Datum, ohne Uhrzeit).
+            Speichert Neustart-sicher, ob heute bereits eine Abfrage gesendet oder übersprungen wurde.
+          selector:
+            entity:
+              filter:
+                - domain: input_datetime
+        last_clean_sensors:
+          name: "Sensor 'Letzte Reinigung Ende' (optional, empfohlen)"
+          description: >
+            Timestamp-Sensor des Saugroboters (z. B. sensor.*_last_clean_end).
+            Unterdrückt die Abfrage automatisch, falls heute bereits manuell oder per Zeitplan gesaugt wurde.
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain: sensor
+                  device_class: timestamp
+
+    rooms_section:
+      name: "Raumauswahl für Button 'Hauptbereiche'"
+      icon: mdi:floor-plan
+      description: "Legt fest, welche Bereiche gereinigt werden, wenn in der Benachrichtigung auf 'Hauptbereiche' getippt wird."
+      input:
+        main_area_mode:
+          name: "Methode zur Raumreinigung"
+          default: "areas"
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: "Home Assistant Bereiche (vacuum.clean_area – empfohlen)"
+                  value: "areas"
+                - label: "Segment-Nummern (vacuum.send_command / app_segment_clean)"
+                  value: "segments"
+        main_areas:
+          name: "Hauptbereiche (Home Assistant Bereiche)"
+          description: "Wird verwendet, wenn als Methode 'Home Assistant Bereiche' ausgewählt ist."
+          default: []
+          selector:
+            area:
+              multiple: true
+        main_segment_ids:
+          name: "Segment-IDs (kommagetrennt)"
+          description: "Wird verwendet, wenn als Methode 'Segment-Nummern' ausgewählt ist (z. B.: 16, 17, 18)."
+          default: ""
+          selector:
+            text: {}
+
+    options_section:
+      name: "Zeiten & Komfort-Optionen"
+      icon: mdi:clock-outline
+      collapsed: true
+      description: "Optionale Feineinstellungen für Wartezeit, Zeitfenster, Benachrichtigungstext und Sperrschalter."
+      input:
+        leave_delay_minutes:
+          name: "Wartezeit nach Verlassen"
+          description: "Verhindert Benachrichtigungen bei sehr kurzer Abwesenheit."
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 60
+              mode: slider
+              unit_of_measurement: "Minuten"
+        window_start:
+          name: "Früheste Uhrzeit für Abfrage"
+          default: "08:00:00"
+          selector:
+            time: {}
+        window_end:
+          name: "Späteste Uhrzeit für Abfrage"
+          default: "20:00:00"
+          selector:
+            time: {}
+        notification_title:
+          name: "Titel der Push-Benachrichtigung"
+          default: "🤖 Saugroboter starten?"
+          selector:
+            text: {}
+        water_shortage_sensors:
+          name: "Wassertank-Leer-Sensor (optional)"
+          description: "Ergänzt einen Hinweis im Benachrichtigungstext, falls der Sensor aktiv ('on') ist."
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain: binary_sensor
+        block_helpers:
+          name: "Sperr-Schalter / Gäste-Modus (optional)"
+          description: "Solange mindestens einer dieser Schalter (input_boolean) eingeschaltet ist, erfolgt keine Abfrage."
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain: input_boolean
+
+mode: queued
+max: 10
+
+trigger_variables:
+  t_person_1: !input person_1
+  t_person_2: !input person_2
+
+variables:
+  v_person_1: !input person_1
+  v_person_2: !input person_2
+  v_vacuum: !input vacuum_entity
+  v_date_helper: !input last_prompt_helper
+  v_last_clean_sensors: !input last_clean_sensors
+  v_area_mode: !input main_area_mode
+  v_main_areas: !input main_areas
+  v_segment_ids: !input main_segment_ids
+  v_title: !input notification_title
+  v_water_sensors: !input water_shortage_sensors
+  v_block_helpers: !input block_helpers
+  v_self_id: "{{ this.entity_id | default('automation.vacuum_away_notification') }}"
+  v_tag: "{{ 'vacuum_prompt_' ~ (v_self_id | slugify) }}"
+  v_act_full: "{{ 'VACUUM_FULL_' ~ v_self_id }}"
+  v_act_main: "{{ 'VACUUM_MAIN_' ~ v_self_id }}"
+  v_act_skip: "{{ 'VACUUM_SKIP_' ~ v_self_id }}"
+  v_message: >-
+    {%- set water_empty = (v_water_sensors | length > 0) and (v_water_sensors | select('is_state', 'on') | list | length > 0) -%}
+    Beide Personen sind unterwegs. Soll jetzt gereinigt werden?{{ ' (💧 Hinweis: Wassertank leer)' if water_empty else '' }}
+
+triggers:
+  # 1) Beide Personen sind durchgehend für die eingestellte Dauer nicht 'home'
+  - trigger: template
+    value_template: >-
+      {{ not is_state(t_person_1, 'home') and not is_state(t_person_2, 'home') }}
+    for:
+      minutes: !input leave_delay_minutes
+    id: ask_clean
+
+  # 2) Fallback zum Start des Zeitfensters (falls beide schon vor Fensterbeginn gegangen sind)
+  - trigger: time
+    at: !input window_start
+    id: ask_clean_morning
+
+  # 3) Rückkehr einer Person -> offene Benachrichtigung schließen (laufende Reinigung läuft weiter)
+  - trigger: state
+    entity_id:
+      - !input person_1
+      - !input person_2
+    to: "home"
+    id: someone_home
+
+  # 4) Antwort-Aktion aus der Companion App
+  - trigger: event
+    event_type: mobile_app_notification_action
+    id: button_pressed
+
+conditions: []
+
+actions:
+  - choose:
+      # ========================================================================
+      # PFAD 1A: Morgen-Fallback -> Vorprüfung, Wartezeit, erneute Prüfung & Push
+      # ========================================================================
+      - conditions:
+          - condition: trigger
+            id: ask_clean_morning
+          - condition: template
+            alias: "Beide Personen aktuell außer Haus"
+            value_template: >-
+              {{ not is_state(v_person_1, 'home') and not is_state(v_person_2, 'home') }}
+          - condition: template
+            alias: "Saugroboter steht im Dock"
+            value_template: "{{ is_state(v_vacuum, 'docked') }}"
+          - condition: template
+            alias: "Heute noch keine Abfrage gesendet"
+            value_template: "{{ states(v_date_helper) != (now().date() | string) }}"
+          - condition: template
+            alias: "Kein Sperr-Schalter aktiv"
+            value_template: >-
+              {{ (v_block_helpers | length == 0)
+                 or (v_block_helpers | select('is_state', 'on') | list | length == 0) }}
+          - condition: template
+            alias: "Heute noch nicht gereinigt"
+            value_template: >-
+              {% if v_last_clean_sensors | length == 0 %}
+                true
+              {% else %}
+                {% set lc = states(v_last_clean_sensors[0]) %}
+                {{ lc in ['unknown', 'unavailable', '']
+                   or (lc | as_datetime | as_local).date() < now().date() }}
+              {% endif %}
+        sequence:
+          - delay:
+              minutes: !input leave_delay_minutes
+          - condition: template
+            alias: "Beide Personen weiterhin außer Haus"
+            value_template: >-
+              {{ not is_state(v_person_1, 'home') and not is_state(v_person_2, 'home') }}
+          - condition: time
+            after: !input window_start
+            before: !input window_end
+          - condition: template
+            alias: "Saugroboter weiterhin im Dock"
+            value_template: "{{ is_state(v_vacuum, 'docked') }}"
+          - condition: template
+            alias: "Zwischenzeitlich noch nicht gefragt"
+            value_template: "{{ states(v_date_helper) != (now().date() | string) }}"
+          - condition: template
+            alias: "Kein Sperr-Schalter aktiv"
+            value_template: >-
+              {{ (v_block_helpers | length == 0)
+                 or (v_block_helpers | select('is_state', 'on') | list | length == 0) }}
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input last_prompt_helper
+            data:
+              date: "{{ now().date() | string }}"
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_1
+            title: "{{ v_title }}"
+            message: "{{ v_message }}"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+              actions:
+                - action: "{{ v_act_full }}"
+                  title: "🏠 Komplett"
+                - action: "{{ v_act_main }}"
+                  title: "🛋️ Hauptbereiche"
+                - action: "{{ v_act_skip }}"
+                  title: "⏭️ Heute nicht"
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_2
+            title: "{{ v_title }}"
+            message: "{{ v_message }}"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+              actions:
+                - action: "{{ v_act_full }}"
+                  title: "🏠 Komplett"
+                - action: "{{ v_act_main }}"
+                  title: "🛋️ Hauptbereiche"
+                - action: "{{ v_act_skip }}"
+                  title: "⏭️ Heute nicht"
+
+      # ========================================================================
+      # PFAD 1B: Regulärer Abwesenheits-Trigger innerhalb des Zeitfensters
+      # ========================================================================
+      - conditions:
+          - condition: trigger
+            id: ask_clean
+          - condition: time
+            after: !input window_start
+            before: !input window_end
+          - condition: template
+            alias: "Saugroboter steht im Dock"
+            value_template: "{{ is_state(v_vacuum, 'docked') }}"
+          - condition: template
+            alias: "Heute noch keine Abfrage gesendet"
+            value_template: "{{ states(v_date_helper) != (now().date() | string) }}"
+          - condition: template
+            alias: "Kein Sperr-Schalter aktiv"
+            value_template: >-
+              {{ (v_block_helpers | length == 0)
+                 or (v_block_helpers | select('is_state', 'on') | list | length == 0) }}
+          - condition: template
+            alias: "Heute noch nicht gereinigt"
+            value_template: >-
+              {% if v_last_clean_sensors | length == 0 %}
+                true
+              {% else %}
+                {% set lc = states(v_last_clean_sensors[0]) %}
+                {{ lc in ['unknown', 'unavailable', '']
+                   or (lc | as_datetime | as_local).date() < now().date() }}
+              {% endif %}
+        sequence:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input last_prompt_helper
+            data:
+              date: "{{ now().date() | string }}"
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_1
+            title: "{{ v_title }}"
+            message: "{{ v_message }}"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+              actions:
+                - action: "{{ v_act_full }}"
+                  title: "🏠 Komplett"
+                - action: "{{ v_act_main }}"
+                  title: "🛋️ Hauptbereiche"
+                - action: "{{ v_act_skip }}"
+                  title: "⏭️ Heute nicht"
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_2
+            title: "{{ v_title }}"
+            message: "{{ v_message }}"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+              actions:
+                - action: "{{ v_act_full }}"
+                  title: "🏠 Komplett"
+                - action: "{{ v_act_main }}"
+                  title: "🛋️ Hauptbereiche"
+                - action: "{{ v_act_skip }}"
+                  title: "⏭️ Heute nicht"
+
+      # ========================================================================
+      # PFAD 2: Auswahl "Komplett"
+      # ========================================================================
+      - conditions:
+          - condition: trigger
+            id: button_pressed
+          - condition: template
+            alias: "Button 'Komplett' dieser Automatisierung gedrückt"
+            value_template: >-
+              {{ (trigger is defined) and (trigger.event.data.action | default('') == v_act_full) }}
+        sequence:
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_1
+            message: "clear_notification"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_2
+            message: "clear_notification"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+          - condition: template
+            alias: "Saugroboter steht noch im Dock"
+            value_template: "{{ is_state(v_vacuum, 'docked') }}"
+          - action: vacuum.start
+            target:
+              entity_id: !input vacuum_entity
+
+      # ========================================================================
+      # PFAD 3: Auswahl "Hauptbereiche"
+      # ========================================================================
+      - conditions:
+          - condition: trigger
+            id: button_pressed
+          - condition: template
+            alias: "Button 'Hauptbereiche' dieser Automatisierung gedrückt"
+            value_template: >-
+              {{ (trigger is defined) and (trigger.event.data.action | default('') == v_act_main) }}
+        sequence:
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_1
+            message: "clear_notification"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_2
+            message: "clear_notification"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+          - condition: template
+            alias: "Saugroboter steht noch im Dock"
+            value_template: "{{ is_state(v_vacuum, 'docked') }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ v_area_mode == 'areas' and (v_main_areas | length > 0) }}"
+                sequence:
+                  - action: vacuum.clean_area
+                    target:
+                      entity_id: !input vacuum_entity
+                    data:
+                      cleaning_area_id: !input main_areas
+              - conditions:
+                  - condition: template
+                    value_template: "{{ v_area_mode == 'segments' and (v_segment_ids | trim != '') }}"
+                sequence:
+                  - action: vacuum.send_command
+                    target:
+                      entity_id: !input vacuum_entity
+                    data:
+                      command: app_segment_clean
+                      params:
+                        - segments: >-
+                            {{ v_segment_ids.split(',') | map('trim') | reject('eq', '') | map('int', 0) | reject('eq', 0) | list }}
+                          repeat: 1
+
+      # ========================================================================
+      # PFAD 4: Auswahl "Heute nicht" ODER Heimkehr einer Person
+      # ========================================================================
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: someone_home
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: button_pressed
+                  - condition: template
+                    alias: "Button 'Heute nicht' dieser Automatisierung gedrückt"
+                    value_template: >-
+                      {{ (trigger is defined) and (trigger.event.data.action | default('') == v_act_skip) }}
+        sequence:
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_1
+            message: "clear_notification"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_2
+            message: "clear_notification"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
