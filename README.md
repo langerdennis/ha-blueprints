@@ -1,40 +1,40 @@
 # Home Assistant Blueprints
 
-Sammlung wiederverwendbarer Blueprints für [Home Assistant](https://www.home-assistant.io/) (ab Version `2024.8.0`).
+A collection of reusable blueprints for [Home Assistant](https://www.home-assistant.io/) (`2024.8.0+`).
 
 ---
 
-## Verfügbare Blueprints
+## Available Blueprints
 
-### 🤖 Saugroboter: Abwesenheits-Abfrage (Actionable Notification)
+### 🤖 Vacuum: Away Prompt (Actionable Notification)
 
-Sendet maximal **1× täglich** innerhalb eines einstellbaren Zeitfensters eine interaktive Push-Benachrichtigung an zwei Smartphones (Home Assistant Companion App), sobald beide Personen außer Haus sind und heute noch nicht gereinigt wurde.
+Sends at most **once per day** within a configurable time window an interactive push notification to two smartphones (Home Assistant Companion App) once both residents have been away for a set duration and no cleaning has taken place today.
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Flangerdennis%2Fha-blueprints%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fvacuum_away_notification.yaml)
 
-**Direkte Import-URL:**
+**Direct Import URL:**
 ```text
 https://github.com/langerdennis/ha-blueprints/blob/main/blueprints/automation/vacuum_away_notification.yaml
 ```
 
-#### Funktionen
-- **3 Auswahl-Aktionen direkt in der Push-Nachricht:**
-  - `🏠 Komplett` – Startet eine vollständige Reinigung (`vacuum.start`)
-  - `🛋️ Hauptbereiche` – Reinigt ausgewählte Home-Assistant-Bereiche (`vacuum.clean_area`) oder Segment-IDs (`app_segment_clean`)
-  - `⏭️ Heute nicht` – Schließt die Abfrage für den restlichen Tag
-- **Synchrones Schließen (`clear_notification`):** Sobald auf einem Gerät ein Button angetippt wird oder eine Person nach Hause zurückkehrt, wird die Benachrichtigung automatisch auf beiden Smartphones entfernt (eine bereits laufende Reinigung wird nicht abgebrochen).
-- **Morgen-Fallback:** Verlassen beide Personen bereits vor Beginn des Zeitfensters (z. B. vor `08:00` Uhr) das Haus, wird die Abfrage zum Start des Zeitfensters nachgeholt.
-- **Zonen- & Neustart-sicher:** Arbeitet rein Event-basiert ohne blockierendes `wait_for_trigger` und unterstützt auch mehrere Saugroboter-Instanzen parallel.
-- **Optionale Zusatzfunktionen:** Wassertank-Leer-Hinweis im Push-Text sowie Sperrschalter (z. B. für Gäste- oder Urlaubsmodus).
+#### Features
+- **3 Action Buttons in the Notification:**
+  - `🏠 Full Clean` – Starts a full cleaning run (`vacuum.start`)
+  - `🛋️ Main Areas` – Cleans selected Home Assistant areas (`vacuum.clean_area`) or raw room segment IDs (`app_segment_clean`)
+  - `⏭️ Skip Today` – Dismisses the prompt for the rest of the day
+- **Synchronous Dismissal (`clear_notification`):** As soon as either resident taps a button or returns home, the notification is automatically cleared on both devices (an already running clean is not interrupted).
+- **Morning Fallback:** If both residents leave before the active time window starts (e.g. before `08:00`), the prompt is deferred until the start of the window.
+- **Zone- & Restart-Safe:** Uses event-driven triggers instead of blocking `wait_for_trigger` calls and supports multiple vacuum instances in parallel.
+- **Optional Extras:** Water tank empty notice appended to the message and optional override/guest-mode switches (`input_boolean`).
 
-#### Voraussetzungen in Home Assistant
-1. **Home Assistant Companion App** auf beiden Smartphones eingerichtet.
-2. **Ein Datums-Helfer (`input_datetime`):**
-   - *Einstellungen → Geräte & Dienste → Helfer → `+ Helfer erstellen` → Datum und/oder Uhrzeit*
-   - Option **„Datum“** aktivieren (ohne Uhrzeit) und speichern.
-3. **Für die Raumreinigung („Hauptbereiche“) – eine der beiden Varianten:**
-   - **Variante A (empfohlen):** In den Einstellungen der `vacuum`-Entität die Saugroboter-Segmente den Home-Assistant-Bereichen zuordnen (*Segmente Bereichen zuordnen*) und im Blueprint die gewünschten Bereiche auswählen.
-   - **Variante B:** Unter *Entwicklerwerkzeuge → Aktionen* die Aktion `roborock.get_maps` ausführen, die gewünschten Raum-Nummern ablesen und im Blueprint kommagetrennt eintragen (z. B. `16, 17, 18`).
+#### Prerequisites in Home Assistant
+1. **Home Assistant Companion App** installed on both smartphones.
+2. **One Date Helper (`input_datetime`):**
+   - Go to **Settings → Devices & services → Helpers → + Create Helper → Date and/or time**
+   - Select **Date** only (without time) and save.
+3. **For Room Cleaning (`Main Areas`) – choose one method:**
+   - **Option A (recommended):** Open your vacuum entity settings, use **Map vacuum segments to areas**, and select the desired areas in the blueprint.
+   - **Option B:** Run `roborock.get_maps` under **Developer Tools → Actions**, note the room segment IDs, and enter them comma-separated in the blueprint (e.g. `16, 17, 18`).
 
-#### Updates einspielen
-Bei Änderungen in diesem Repository kann der Blueprint direkt in Home Assistant über *Einstellungen → Automatisierungen & Szenen → Blueprints → `⋮` → Blueprint erneut importieren* aktualisiert werden. Bestehende Automatisierungen und zugeordnete Entitäten bleiben dabei erhalten.
+#### Updating
+To pull future updates from this repository, go to **Settings → Automations & scenes → Blueprints → `⋮` → Re-import blueprint** in Home Assistant. Existing automations and selected entities remain intact.

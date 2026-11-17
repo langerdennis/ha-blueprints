@@ -1,20 +1,21 @@
 blueprint:
-  name: "Saugroboter: Abwesenheits-Abfrage (Actionable Notification)"
+  name: "Vacuum: Away Prompt (Actionable Notification)"
   description: >
-    Sendet maximal 1x täglich eine Actionable Notification an zwei Smartphones
-    (Home Assistant Companion App), sobald beide Personen für eine einstellbare
-    Dauer außer Haus sind und am heutigen Tag noch nicht gereinigt wurde.
-    Schließt offene Benachrichtigungen synchron auf beiden Geräten, sobald eine
-    Auswahl getroffen wird oder jemand nach Hause zurückkehrt.
+    Sends at most one actionable notification per day to two smartphones
+    (Home Assistant Companion App) when both residents have been away for a
+    configurable duration and no cleaning has happened today. Synchronously
+    clears open notifications on both devices as soon as an action is chosen
+    or either resident returns home.
   domain: automation
-  min_version: "2024.8.0"
+  homeassistant:
+    min_version: "2024.8.0"
   source_url: https://github.com/langerdennis/ha-blueprints/blob/main/blueprints/automation/vacuum_away_notification.yaml
 
   input:
     residents_section:
-      name: "Personen & Smartphones"
+      name: "Residents & Smartphones"
       icon: mdi:account-multiple
-      description: "Auswahl der beiden Personen und der zugehörigen Geräte mit installierter Home Assistant Companion App."
+      description: "Select both person entities and their corresponding devices running the Home Assistant Companion App."
       input:
         person_1:
           name: "Person 1"
@@ -23,7 +24,7 @@ blueprint:
               filter:
                 - domain: person
         notify_device_1:
-          name: "Smartphone Person 1"
+          name: "Person 1 Smartphone"
           selector:
             device:
               integration: mobile_app
@@ -34,36 +35,36 @@ blueprint:
               filter:
                 - domain: person
         notify_device_2:
-          name: "Smartphone Person 2"
+          name: "Person 2 Smartphone"
           selector:
             device:
               integration: mobile_app
 
     vacuum_section:
-      name: "Saugroboter & Tages-Merker"
+      name: "Vacuum & Daily Lock"
       icon: mdi:robot-vacuum
-      description: "Konfiguration des Saugroboters sowie der täglichen Abfrage-Sperre."
+      description: "Configure the vacuum entity and the daily prompt tracking helper."
       input:
         vacuum_entity:
-          name: "Saugroboter"
+          name: "Vacuum"
           selector:
             entity:
               filter:
                 - domain: vacuum
         last_prompt_helper:
-          name: "Datums-Helfer (Letzte Abfrage)"
+          name: "Date Helper (Last Prompt)"
           description: >
-            Helfer vom Typ 'Datum' (input_datetime nur mit Datum, ohne Uhrzeit).
-            Speichert Neustart-sicher, ob heute bereits eine Abfrage gesendet oder übersprungen wurde.
+            A 'Date' input_datetime helper (date only, no time).
+            Persists across restarts whether a prompt was already sent or skipped today.
           selector:
             entity:
               filter:
                 - domain: input_datetime
         last_clean_sensors:
-          name: "Sensor 'Letzte Reinigung Ende' (optional, empfohlen)"
+          name: "Last Clean End Sensor (optional, recommended)"
           description: >
-            Timestamp-Sensor des Saugroboters (z. B. sensor.*_last_clean_end).
-            Unterdrückt die Abfrage automatisch, falls heute bereits manuell oder per Zeitplan gesaugt wurde.
+            Timestamp sensor of the vacuum (e.g. sensor.*_last_clean_end).
+            Automatically suppresses prompts if a manual or scheduled clean already finished today.
           default: []
           selector:
             entity:
@@ -73,69 +74,69 @@ blueprint:
                   device_class: timestamp
 
     rooms_section:
-      name: "Raumauswahl für Button 'Hauptbereiche'"
+      name: "Room Selection for 'Main Areas' Button"
       icon: mdi:floor-plan
-      description: "Legt fest, welche Bereiche gereinigt werden, wenn in der Benachrichtigung auf 'Hauptbereiche' getippt wird."
+      description: "Defines which areas or room segments are cleaned when tapping 'Main Areas' in the notification."
       input:
         main_area_mode:
-          name: "Methode zur Raumreinigung"
+          name: "Room Cleaning Method"
           default: "areas"
           selector:
             select:
               mode: dropdown
               options:
-                - label: "Home Assistant Bereiche (vacuum.clean_area – empfohlen)"
+                - label: "Home Assistant Areas (vacuum.clean_area – recommended)"
                   value: "areas"
-                - label: "Segment-Nummern (vacuum.send_command / app_segment_clean)"
+                - label: "Segment IDs (vacuum.send_command / app_segment_clean)"
                   value: "segments"
         main_areas:
-          name: "Hauptbereiche (Home Assistant Bereiche)"
-          description: "Wird verwendet, wenn als Methode 'Home Assistant Bereiche' ausgewählt ist."
+          name: "Main Areas (Home Assistant Areas)"
+          description: "Used when 'Home Assistant Areas' is selected above."
           default: []
           selector:
             area:
               multiple: true
         main_segment_ids:
-          name: "Segment-IDs (kommagetrennt)"
-          description: "Wird verwendet, wenn als Methode 'Segment-Nummern' ausgewählt ist (z. B.: 16, 17, 18)."
+          name: "Segment IDs (comma-separated)"
+          description: "Used when 'Segment IDs' is selected above (e.g. 16, 17, 18)."
           default: ""
           selector:
             text: {}
 
     options_section:
-      name: "Zeiten & Komfort-Optionen"
+      name: "Schedule & Comfort Options"
       icon: mdi:clock-outline
       collapsed: true
-      description: "Optionale Feineinstellungen für Wartezeit, Zeitfenster, Benachrichtigungstext und Sperrschalter."
+      description: "Optional fine-tuning for leave delay, active time window, notification text, and override switches."
       input:
         leave_delay_minutes:
-          name: "Wartezeit nach Verlassen"
-          description: "Verhindert Benachrichtigungen bei sehr kurzer Abwesenheit."
+          name: "Leave Delay"
+          description: "Prevents notifications during brief departures."
           default: 10
           selector:
             number:
               min: 1
               max: 60
               mode: slider
-              unit_of_measurement: "Minuten"
+              unit_of_measurement: "minutes"
         window_start:
-          name: "Früheste Uhrzeit für Abfrage"
+          name: "Earliest Prompt Time"
           default: "08:00:00"
           selector:
             time: {}
         window_end:
-          name: "Späteste Uhrzeit für Abfrage"
+          name: "Latest Prompt Time"
           default: "20:00:00"
           selector:
             time: {}
         notification_title:
-          name: "Titel der Push-Benachrichtigung"
-          default: "🤖 Saugroboter starten?"
+          name: "Notification Title"
+          default: "🤖 Start Vacuum?"
           selector:
             text: {}
         water_shortage_sensors:
-          name: "Wassertank-Leer-Sensor (optional)"
-          description: "Ergänzt einen Hinweis im Benachrichtigungstext, falls der Sensor aktiv ('on') ist."
+          name: "Water Tank Empty Sensor (optional)"
+          description: "Appends a note to the notification text if the selected binary sensor is 'on'."
           default: []
           selector:
             entity:
@@ -143,8 +144,8 @@ blueprint:
               filter:
                 - domain: binary_sensor
         block_helpers:
-          name: "Sperr-Schalter / Gäste-Modus (optional)"
-          description: "Solange mindestens einer dieser Schalter (input_boolean) eingeschaltet ist, erfolgt keine Abfrage."
+          name: "Override / Guest Mode Switches (optional)"
+          description: "Suppresses the prompt whenever any of these input_boolean helpers is turned 'on'."
           default: []
           selector:
             entity:
@@ -178,10 +179,10 @@ variables:
   v_act_skip: "{{ 'VACUUM_SKIP_' ~ v_self_id }}"
   v_message: >-
     {%- set water_empty = (v_water_sensors | length > 0) and (v_water_sensors | select('is_state', 'on') | list | length > 0) -%}
-    Beide Personen sind unterwegs. Soll jetzt gereinigt werden?{{ ' (💧 Hinweis: Wassertank leer)' if water_empty else '' }}
+    Both residents are away. Would you like to start cleaning?{{ ' (💧 Note: Water tank empty)' if water_empty else '' }}
 
 triggers:
-  # 1) Beide Personen sind durchgehend für die eingestellte Dauer nicht 'home'
+  # 1) Both residents continuously away for the configured duration
   - trigger: template
     value_template: >-
       {{ not is_state(t_person_1, 'home') and not is_state(t_person_2, 'home') }}
@@ -189,12 +190,12 @@ triggers:
       minutes: !input leave_delay_minutes
     id: ask_clean
 
-  # 2) Fallback zum Start des Zeitfensters (falls beide schon vor Fensterbeginn gegangen sind)
+  # 2) Fallback at window start (in case both left before window_start)
   - trigger: time
     at: !input window_start
     id: ask_clean_morning
 
-  # 3) Rückkehr einer Person -> offene Benachrichtigung schließen (laufende Reinigung läuft weiter)
+  # 3) Either resident returns home -> clear open notifications (do not stop active clean)
   - trigger: state
     entity_id:
       - !input person_1
@@ -202,7 +203,7 @@ triggers:
     to: "home"
     id: someone_home
 
-  # 4) Antwort-Aktion aus der Companion App
+  # 4) Action button tapped in the Companion App
   - trigger: event
     event_type: mobile_app_notification_action
     id: button_pressed
@@ -212,28 +213,28 @@ conditions: []
 actions:
   - choose:
       # ========================================================================
-      # PFAD 1A: Morgen-Fallback -> Vorprüfung, Wartezeit, erneute Prüfung & Push
+      # PATH 1A: Morning fallback -> pre-check, leave delay, re-check & notify
       # ========================================================================
       - conditions:
           - condition: trigger
             id: ask_clean_morning
           - condition: template
-            alias: "Beide Personen aktuell außer Haus"
+            alias: "Both residents currently away"
             value_template: >-
               {{ not is_state(v_person_1, 'home') and not is_state(v_person_2, 'home') }}
           - condition: template
-            alias: "Saugroboter steht im Dock"
+            alias: "Vacuum is docked"
             value_template: "{{ is_state(v_vacuum, 'docked') }}"
           - condition: template
-            alias: "Heute noch keine Abfrage gesendet"
+            alias: "Not prompted yet today"
             value_template: "{{ states(v_date_helper) != (now().date() | string) }}"
           - condition: template
-            alias: "Kein Sperr-Schalter aktiv"
+            alias: "No override switch active"
             value_template: >-
               {{ (v_block_helpers | length == 0)
                  or (v_block_helpers | select('is_state', 'on') | list | length == 0) }}
           - condition: template
-            alias: "Heute noch nicht gereinigt"
+            alias: "Not cleaned yet today"
             value_template: >-
               {% if v_last_clean_sensors | length == 0 %}
                 true
@@ -246,20 +247,20 @@ actions:
           - delay:
               minutes: !input leave_delay_minutes
           - condition: template
-            alias: "Beide Personen weiterhin außer Haus"
+            alias: "Both residents still away"
             value_template: >-
               {{ not is_state(v_person_1, 'home') and not is_state(v_person_2, 'home') }}
           - condition: time
             after: !input window_start
             before: !input window_end
           - condition: template
-            alias: "Saugroboter weiterhin im Dock"
+            alias: "Vacuum still docked"
             value_template: "{{ is_state(v_vacuum, 'docked') }}"
           - condition: template
-            alias: "Zwischenzeitlich noch nicht gefragt"
+            alias: "Still not prompted today"
             value_template: "{{ states(v_date_helper) != (now().date() | string) }}"
           - condition: template
-            alias: "Kein Sperr-Schalter aktiv"
+            alias: "No override switch active"
             value_template: >-
               {{ (v_block_helpers | length == 0)
                  or (v_block_helpers | select('is_state', 'on') | list | length == 0) }}
@@ -279,11 +280,11 @@ actions:
               priority: high
               actions:
                 - action: "{{ v_act_full }}"
-                  title: "🏠 Komplett"
+                  title: "🏠 Full Clean"
                 - action: "{{ v_act_main }}"
-                  title: "🛋️ Hauptbereiche"
+                  title: "🛋️ Main Areas"
                 - action: "{{ v_act_skip }}"
-                  title: "⏭️ Heute nicht"
+                  title: "⏭️ Skip Today"
           - domain: mobile_app
             type: notify
             device_id: !input notify_device_2
@@ -295,14 +296,14 @@ actions:
               priority: high
               actions:
                 - action: "{{ v_act_full }}"
-                  title: "🏠 Komplett"
+                  title: "🏠 Full Clean"
                 - action: "{{ v_act_main }}"
-                  title: "🛋️ Hauptbereiche"
+                  title: "🛋️ Main Areas"
                 - action: "{{ v_act_skip }}"
-                  title: "⏭️ Heute nicht"
+                  title: "⏭️ Skip Today"
 
       # ========================================================================
-      # PFAD 1B: Regulärer Abwesenheits-Trigger innerhalb des Zeitfensters
+      # PATH 1B: Regular away trigger within active time window
       # ========================================================================
       - conditions:
           - condition: trigger
@@ -311,18 +312,18 @@ actions:
             after: !input window_start
             before: !input window_end
           - condition: template
-            alias: "Saugroboter steht im Dock"
+            alias: "Vacuum is docked"
             value_template: "{{ is_state(v_vacuum, 'docked') }}"
           - condition: template
-            alias: "Heute noch keine Abfrage gesendet"
+            alias: "Not prompted yet today"
             value_template: "{{ states(v_date_helper) != (now().date() | string) }}"
           - condition: template
-            alias: "Kein Sperr-Schalter aktiv"
+            alias: "No override switch active"
             value_template: >-
               {{ (v_block_helpers | length == 0)
                  or (v_block_helpers | select('is_state', 'on') | list | length == 0) }}
           - condition: template
-            alias: "Heute noch nicht gereinigt"
+            alias: "Not cleaned yet today"
             value_template: >-
               {% if v_last_clean_sensors | length == 0 %}
                 true
@@ -348,11 +349,11 @@ actions:
               priority: high
               actions:
                 - action: "{{ v_act_full }}"
-                  title: "🏠 Komplett"
+                  title: "🏠 Full Clean"
                 - action: "{{ v_act_main }}"
-                  title: "🛋️ Hauptbereiche"
+                  title: "🛋️ Main Areas"
                 - action: "{{ v_act_skip }}"
-                  title: "⏭️ Heute nicht"
+                  title: "⏭️ Skip Today"
           - domain: mobile_app
             type: notify
             device_id: !input notify_device_2
@@ -364,20 +365,20 @@ actions:
               priority: high
               actions:
                 - action: "{{ v_act_full }}"
-                  title: "🏠 Komplett"
+                  title: "🏠 Full Clean"
                 - action: "{{ v_act_main }}"
-                  title: "🛋️ Hauptbereiche"
+                  title: "🛋️ Main Areas"
                 - action: "{{ v_act_skip }}"
-                  title: "⏭️ Heute nicht"
+                  title: "⏭️ Skip Today"
 
       # ========================================================================
-      # PFAD 2: Auswahl "Komplett"
+      # PATH 2: Action "Full Clean" tapped
       # ========================================================================
       - conditions:
           - condition: trigger
             id: button_pressed
           - condition: template
-            alias: "Button 'Komplett' dieser Automatisierung gedrückt"
+            alias: "Matched 'Full Clean' action for this automation"
             value_template: >-
               {{ (trigger is defined) and (trigger.event.data.action | default('') == v_act_full) }}
         sequence:
@@ -398,20 +399,20 @@ actions:
               ttl: 0
               priority: high
           - condition: template
-            alias: "Saugroboter steht noch im Dock"
+            alias: "Vacuum still docked"
             value_template: "{{ is_state(v_vacuum, 'docked') }}"
           - action: vacuum.start
             target:
               entity_id: !input vacuum_entity
 
       # ========================================================================
-      # PFAD 3: Auswahl "Hauptbereiche"
+      # PATH 3: Action "Main Areas" tapped
       # ========================================================================
       - conditions:
           - condition: trigger
             id: button_pressed
           - condition: template
-            alias: "Button 'Hauptbereiche' dieser Automatisierung gedrückt"
+            alias: "Matched 'Main Areas' action for this automation"
             value_template: >-
               {{ (trigger is defined) and (trigger.event.data.action | default('') == v_act_main) }}
         sequence:
@@ -432,7 +433,7 @@ actions:
               ttl: 0
               priority: high
           - condition: template
-            alias: "Saugroboter steht noch im Dock"
+            alias: "Vacuum still docked"
             value_template: "{{ is_state(v_vacuum, 'docked') }}"
           - choose:
               - conditions:
@@ -459,7 +460,7 @@ actions:
                           repeat: 1
 
       # ========================================================================
-      # PFAD 4: Auswahl "Heute nicht" ODER Heimkehr einer Person
+      # PATH 4: Action "Skip Today" tapped OR resident returned home
       # ========================================================================
       - conditions:
           - condition: or
@@ -471,7 +472,7 @@ actions:
                   - condition: trigger
                     id: button_pressed
                   - condition: template
-                    alias: "Button 'Heute nicht' dieser Automatisierung gedrückt"
+                    alias: "Matched 'Skip Today' action for this automation"
                     value_template: >-
                       {{ (trigger is defined) and (trigger.event.data.action | default('') == v_act_skip) }}
         sequence:
