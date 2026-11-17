@@ -134,6 +134,32 @@ blueprint:
           default: "🤖 Start Vacuum?"
           selector:
             text: {}
+        notification_message:
+          name: "Notification Message"
+          default: "Both residents are away. Would you like to start cleaning?"
+          selector:
+            text: {}
+        water_shortage_note:
+          name: "Water Tank Empty Note"
+          description: "Appended to the notification message when a water shortage sensor is 'on'."
+          default: "(💧 Note: Water tank empty)"
+          selector:
+            text: {}
+        action_full_label:
+          name: "Action Button: Full Clean"
+          default: "🏠 Full Clean"
+          selector:
+            text: {}
+        action_main_label:
+          name: "Action Button: Main Areas"
+          default: "🛋️ Main Areas"
+          selector:
+            text: {}
+        action_skip_label:
+          name: "Action Button: Skip Today"
+          default: "⏭️ Skip Today"
+          selector:
+            text: {}
         water_shortage_sensors:
           name: "Water Tank Empty Sensor (optional)"
           description: "Appends a note to the notification text if the selected binary sensor is 'on'."
@@ -170,6 +196,11 @@ variables:
   v_main_areas: !input main_areas
   v_segment_ids: !input main_segment_ids
   v_title: !input notification_title
+  v_message_base: !input notification_message
+  v_water_note: !input water_shortage_note
+  v_act_full_label: !input action_full_label
+  v_act_main_label: !input action_main_label
+  v_act_skip_label: !input action_skip_label
   v_water_sensors: !input water_shortage_sensors
   v_block_helpers: !input block_helpers
   v_self_id: "{{ this.entity_id | default('automation.vacuum_away_notification') }}"
@@ -179,7 +210,7 @@ variables:
   v_act_skip: "{{ 'VACUUM_SKIP_' ~ v_self_id }}"
   v_message: >-
     {%- set water_empty = (v_water_sensors | length > 0) and (v_water_sensors | select('is_state', 'on') | list | length > 0) -%}
-    Both residents are away. Would you like to start cleaning?{{ ' (💧 Note: Water tank empty)' if water_empty else '' }}
+    {{ v_message_base }}{{ (' ' ~ v_water_note) if water_empty else '' }}
 
 triggers:
   # 1) Both residents continuously away for the configured duration
@@ -280,11 +311,11 @@ actions:
               priority: high
               actions:
                 - action: "{{ v_act_full }}"
-                  title: "🏠 Full Clean"
+                  title: "{{ v_act_full_label }}"
                 - action: "{{ v_act_main }}"
-                  title: "🛋️ Main Areas"
+                  title: "{{ v_act_main_label }}"
                 - action: "{{ v_act_skip }}"
-                  title: "⏭️ Skip Today"
+                  title: "{{ v_act_skip_label }}"
           - domain: mobile_app
             type: notify
             device_id: !input notify_device_2
@@ -296,11 +327,11 @@ actions:
               priority: high
               actions:
                 - action: "{{ v_act_full }}"
-                  title: "🏠 Full Clean"
+                  title: "{{ v_act_full_label }}"
                 - action: "{{ v_act_main }}"
-                  title: "🛋️ Main Areas"
+                  title: "{{ v_act_main_label }}"
                 - action: "{{ v_act_skip }}"
-                  title: "⏭️ Skip Today"
+                  title: "{{ v_act_skip_label }}"
 
       # ========================================================================
       # PATH 1B: Regular away trigger within active time window
@@ -349,11 +380,11 @@ actions:
               priority: high
               actions:
                 - action: "{{ v_act_full }}"
-                  title: "🏠 Full Clean"
+                  title: "{{ v_act_full_label }}"
                 - action: "{{ v_act_main }}"
-                  title: "🛋️ Main Areas"
+                  title: "{{ v_act_main_label }}"
                 - action: "{{ v_act_skip }}"
-                  title: "⏭️ Skip Today"
+                  title: "{{ v_act_skip_label }}"
           - domain: mobile_app
             type: notify
             device_id: !input notify_device_2
@@ -365,11 +396,11 @@ actions:
               priority: high
               actions:
                 - action: "{{ v_act_full }}"
-                  title: "🏠 Full Clean"
+                  title: "{{ v_act_full_label }}"
                 - action: "{{ v_act_main }}"
-                  title: "🛋️ Main Areas"
+                  title: "{{ v_act_main_label }}"
                 - action: "{{ v_act_skip }}"
-                  title: "⏭️ Skip Today"
+                  title: "{{ v_act_skip_label }}"
 
       # ========================================================================
       # PATH 2: Action "Full Clean" tapped
