@@ -61,10 +61,10 @@ blueprint:
               filter:
                 - domain: input_datetime
         last_clean_sensors:
-          name: "Last Clean End Sensor (optional, recommended)"
+          name: "Last Clean Timestamp Sensor (optional, recommended)"
           description: >
-            Timestamp sensor of the vacuum (e.g. sensor.*_last_clean_end).
-            Automatically suppresses prompts if a manual or scheduled clean already finished today.
+            One or more timestamp sensors of the vacuum (e.g. sensor.*_last_clean_begin or sensor.*_last_clean_end).
+            Automatically suppresses prompts if a manual or scheduled clean already started or finished today.
           default: []
           selector:
             entity:
@@ -267,13 +267,17 @@ actions:
           - condition: template
             alias: "Not cleaned yet today"
             value_template: >-
-              {% if v_last_clean_sensors | length == 0 %}
-                true
-              {% else %}
-                {% set lc = states(v_last_clean_sensors[0]) %}
-                {{ lc in ['unknown', 'unavailable', '']
-                   or (lc | as_datetime | as_local).date() < now().date() }}
-              {% endif %}
+              {% set ns = namespace(cleaned_today=false) %}
+              {% for s in v_last_clean_sensors %}
+                {% set lc = states(s) %}
+                {% if lc not in ['unknown', 'unavailable', ''] %}
+                  {% set dt = lc | as_datetime(none) %}
+                  {% if dt is not none and (dt | as_local).date() >= now().date() %}
+                    {% set ns.cleaned_today = true %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {{ not ns.cleaned_today }}
         sequence:
           - delay:
               minutes: !input leave_delay_minutes
@@ -295,6 +299,20 @@ actions:
             value_template: >-
               {{ (v_block_helpers | length == 0)
                  or (v_block_helpers | select('is_state', 'on') | list | length == 0) }}
+          - condition: template
+            alias: "Still not cleaned yet today"
+            value_template: >-
+              {% set ns = namespace(cleaned_today=false) %}
+              {% for s in v_last_clean_sensors %}
+                {% set lc = states(s) %}
+                {% if lc not in ['unknown', 'unavailable', ''] %}
+                  {% set dt = lc | as_datetime(none) %}
+                  {% if dt is not none and (dt | as_local).date() >= now().date() %}
+                    {% set ns.cleaned_today = true %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {{ not ns.cleaned_today }}
           - domain: mobile_app
             type: notify
             device_id: !input notify_device_1
@@ -351,13 +369,17 @@ actions:
           - condition: template
             alias: "Not cleaned yet today"
             value_template: >-
-              {% if v_last_clean_sensors | length == 0 %}
-                true
-              {% else %}
-                {% set lc = states(v_last_clean_sensors[0]) %}
-                {{ lc in ['unknown', 'unavailable', '']
-                   or (lc | as_datetime | as_local).date() < now().date() }}
-              {% endif %}
+              {% set ns = namespace(cleaned_today=false) %}
+              {% for s in v_last_clean_sensors %}
+                {% set lc = states(s) %}
+                {% if lc not in ['unknown', 'unavailable', ''] %}
+                  {% set dt = lc | as_datetime(none) %}
+                  {% if dt is not none and (dt | as_local).date() >= now().date() %}
+                    {% set ns.cleaned_today = true %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {{ not ns.cleaned_today }}
         sequence:
           - domain: mobile_app
             type: notify
