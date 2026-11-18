@@ -55,7 +55,7 @@ blueprint:
           name: "Date Helper (Last Prompt)"
           description: >
             A 'Date' input_datetime helper (date only, no time).
-            Persists across restarts whether a prompt was already sent or skipped today.
+            Persists across restarts whether a prompt action (start or skip) was already chosen today.
           selector:
             entity:
               filter:
@@ -295,11 +295,6 @@ actions:
             value_template: >-
               {{ (v_block_helpers | length == 0)
                  or (v_block_helpers | select('is_state', 'on') | list | length == 0) }}
-          - action: input_datetime.set_datetime
-            target:
-              entity_id: !input last_prompt_helper
-            data:
-              date: "{{ now().date() | string }}"
           - domain: mobile_app
             type: notify
             device_id: !input notify_device_1
@@ -364,11 +359,6 @@ actions:
                    or (lc | as_datetime | as_local).date() < now().date() }}
               {% endif %}
         sequence:
-          - action: input_datetime.set_datetime
-            target:
-              entity_id: !input last_prompt_helper
-            data:
-              date: "{{ now().date() | string }}"
           - domain: mobile_app
             type: notify
             device_id: !input notify_device_1
@@ -429,6 +419,11 @@ actions:
               tag: "{{ v_tag }}"
               ttl: 0
               priority: high
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input last_prompt_helper
+            data:
+              date: "{{ now().date() | string }}"
           - condition: template
             alias: "Vacuum still docked"
             value_template: "{{ is_state(v_vacuum, 'docked') }}"
@@ -463,6 +458,11 @@ actions:
               tag: "{{ v_tag }}"
               ttl: 0
               priority: high
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input last_prompt_helper
+            data:
+              date: "{{ now().date() | string }}"
           - condition: template
             alias: "Vacuum still docked"
             value_template: "{{ is_state(v_vacuum, 'docked') }}"
@@ -491,21 +491,44 @@ actions:
                           repeat: 1
 
       # ========================================================================
-      # PATH 4: Action "Skip Today" tapped OR resident returned home
+      # PATH 4: Action "Skip Today" tapped -> mark day done & clear notifications
       # ========================================================================
       - conditions:
-          - condition: or
-            conditions:
-              - condition: trigger
-                id: someone_home
-              - condition: and
-                conditions:
-                  - condition: trigger
-                    id: button_pressed
-                  - condition: template
-                    alias: "Matched 'Skip Today' action for this automation"
-                    value_template: >-
-                      {{ (trigger is defined) and (trigger.event.data.action | default('') == v_act_skip) }}
+          - condition: trigger
+            id: button_pressed
+          - condition: template
+            alias: "Matched 'Skip Today' action for this automation"
+            value_template: >-
+              {{ (trigger is defined) and (trigger.event.data.action | default('') == v_act_skip) }}
+        sequence:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input last_prompt_helper
+            data:
+              date: "{{ now().date() | string }}"
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_1
+            message: "clear_notification"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device_2
+            message: "clear_notification"
+            data:
+              tag: "{{ v_tag }}"
+              ttl: 0
+              priority: high
+
+      # ========================================================================
+      # PATH 5: Resident returned home -> clear notifications only (do not lock day)
+      # ========================================================================
+      - conditions:
+          - condition: trigger
+            id: someone_home
         sequence:
           - domain: mobile_app
             type: notify
